@@ -1,6 +1,8 @@
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -114,16 +116,17 @@ public class DocumentAnalysis {
 	            return (fsin.getPos() - start) / (float) (end - start);
 	        }
 
-	        private boolean readUntilMatch(byte[] match, boolean withinBlock)
+	        private boolean readUntilMatch(byte[] match, boolean writalbe)
 	        throws IOException {
 	            int i = 0;
-	            while (true) {
+	            while (true) 
+	            {
 	                int b = fsin.read();
 	                // end of file:
 	                    if (b == -1)
 	                        return false;
 	                // save to buffer:
-	                    if (withinBlock)
+	                    if (writalbe)
 	                        buffer.write(b);
 	                // check if we're matching:
 	                    if (b == match[i]) {
@@ -133,7 +136,7 @@ public class DocumentAnalysis {
 	                    } else
 	                        i = 0;
 	                    // see if we've passed the stop point:
-	                    if (!withinBlock && i == 0 && fsin.getPos() >= end)
+	                    if (!writalbe && i == 0 && fsin.getPos() >= end)
 	                        return false;
 	            }
 	        }
@@ -141,56 +144,144 @@ public class DocumentAnalysis {
 	}
 	
 	public static class Map extends 
-	Mapper<LongWritable, Text, Text, IntWritable>
+	Mapper<LongWritable, Text, Text, Text>
 	{
-		private final static IntWritable one = new IntWritable(1);
-		private Text word = new Text();
+		private Text mapResultKey = new Text();
+		private Text mapResultValue = new Text();
+		private Hashtable<String, ArrayList<Integer>> dicHashtable;
 		
-		public void map(LongWritable key, Text value,
-				Context context)
-				throws IOException,InterruptedException
+		public void map(LongWritable key, Text value,Context context)
+		       throws IOException,InterruptedException
 		{
 			XMLHandler xmlHandler = new XMLHandler();
-			//System.out.println(value.toString());
-			//word.set("a");
-			//context.write(word, one);
 			try {
 				xmlHandler.parse(value.toString());
-				//System.out.println(value.toString());
-				//System.out.println(xmlHandler.getId());
 			} catch (Exception e) {
 				System.out.println(e.getMessage());
 			}
 			String pageTitle = xmlHandler.getTitle();
 			String pageId = xmlHandler.getId();
 			String pageText = xmlHandler.getText();
-			//System.out.println(pageText);
 			TextParser textParser = new TextParser();
 			String parsedText = textParser.regExpParse(pageText);
-			//System.out.println(parsedText);
 			StringTokenizer tokenizer = new StringTokenizer(parsedText);
+			dicHashtable = new Hashtable<String, ArrayList<Integer>>();
+			ArrayList<Integer> posArrayList = new ArrayList<Integer>();
+			String tmpKey;
+			int count=0;
 			while (tokenizer.hasMoreTokens())
             {
-                word.set(tokenizer.nextToken());
-                context.write(word, one);
+                count++;
+                //mapresultkey.set(tokenizer.nextToken() + "," + pageId);
+                //position.set(String.valueOf(count));
+                //context.write(mapresultkey, position);
+                tmpKey = tokenizer.nextToken();
+                posArrayList = dicHashtable.get(tmpKey);
+                if (posArrayList != null) {
+					posArrayList.add(count);
+					//System.out.println(tmpKey +","+ count+" 2");
+					dicHashtable.remove(tmpKey);
+					dicHashtable.put(tmpKey, posArrayList);
+                }
+                else {
+                	posArrayList = new ArrayList<Integer>();
+                	//System.out.println(tmpKey +","+ count+" 1");
+                	posArrayList.add(count);
+					dicHashtable.put(tmpKey, posArrayList);
+				}
             }
+			Enumeration<String> keyListEnumeration = dicHashtable.keys();
+			String posString = "";
+			while (keyListEnumeration.hasMoreElements()) {
+				posString = "";
+				tmpKey = keyListEnumeration.nextElement();
+				posArrayList = dicHashtable.get(tmpKey);
+				Collections.sort(posArrayList);
+				for (Integer posInteger : posArrayList)
+				{
+					posString += String.valueOf(posInteger) + ",";
+				}
+				posString = posString.substring(0,posString.length()-1);
+				//System.out.print(tmpKey + "," + pageId);
+				//System.out.println(" " + posString);
+				mapResultKey.set(tmpKey);
+				mapResultValue.set(pageId + ":" + posString);
+				context.write(mapResultKey,mapResultValue);
+			}
 		}
 	}
 	
-	public static class Reduce extends 
-    Reducer<Text, IntWritable, Text, IntWritable>
+	public static class Combine extends 
+    Reducer<Text, Text, Text, Text>
 	{
 		
-		public void reduce(Text key, Iterable<IntWritable> values,
+		public void reduce(Text key, Iterable<Text> values,
+		        Context context)
+		        throws IOException, InterruptedException{
+			    Text position = new Text();
+			    Text value = new Text();
+			    String pos_str="";
+			    
+			    //count term frequency
+			    int tf = 0;
+			    ArrayList<Integer> arr = new ArrayList<Integer>();
+			    for (Text val : values)
+			    {
+			    	tf++;
+			    	//intermediate result of combining
+			    	if(val.toString().contains(":"))
+			    	{
+			    		System.out.println("intermediate result of combining");
+			    		//int pos_start_index = val.find(":");
+			    		//String pos_str_split = val.toString().substring(pos_start_index+1, )
+			    	}
+			    	//output from Mapper
+			    	arr.add(Integer.parseInt(val.toString()));
+			    }
+			    Collections.sort(arr);
+			    int flag = 0;
+			    int last_position =0;
+			    for(Integer i: arr)
+			    {
+			    	if(flag==0) {flag=1;last_position=i;pos_str += (i.toString()+",");}
+			    	else
+			    	{
+			    		pos_str += (String.valueOf((i.intValue()-last_position))+",");
+			    		last_position = i.intValue();
+			    	}
+			    }
+			    pos_str = pos_str.substring(0, pos_str.length()-1);
+			    //pos_str += "]";
+			    position.set(pos_str);
+			    //change key to word
+			    Text reduce_input_key = new Text();
+			    String word = key.toString();
+			    String[] splitter = word.split(",");
+			    reduce_input_key.set(splitter[0]);
+			    value.set(splitter[1]+":"+pos_str);
+			    //System.out.println(reduce_input_key+"  "+splitter[1]+":"+position);
+			    context.write(reduce_input_key, value);
+			}
+	} 
+	
+	public static class Reduce extends 
+    Reducer<Text, Text, Text, Text>
+	{
+		
+		public void reduce(Text key, Iterable<Text> values,
 		        Context context)
 		        throws IOException, InterruptedException
 			{
-			    int sum = 0;
-			    for (IntWritable val : values)
+			    Text output = new Text();
+			    String result = "";
+			    for (Text val : values)
 			    {
-			    	sum += val.get();
+			    	result += ( val.toString() + "-->" );
 			    }
-			    context.write(key, new IntWritable(sum));
+			    result = result.substring(0, result.length()-3);
+			    output.set(result);
+			    //System.out.println(output);
+			    context.write(key, output);
 			}
 	}
 
@@ -204,9 +295,10 @@ public class DocumentAnalysis {
 		job.setJarByClass(DocumentAnalysis.class);
 		job.setJobName("document analysis");
 		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(IntWritable.class);
+		job.setOutputValueClass(Text.class);
 		
 		job.setMapperClass(DocumentAnalysis.Map.class);
+		//job.setCombinerClass(DocumentAnalysis.Combine.class);
 		job.setReducerClass(DocumentAnalysis.Reduce.class);
 		
 		job.setInputFormatClass(XmlInputFormat1.class);
