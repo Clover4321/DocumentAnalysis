@@ -23,23 +23,16 @@ public class MapReducePhase1 {
 		       throws IOException,InterruptedException
 		{
 			XMLHandler xmlHandler = new XMLHandler();
-			//System.out.println(value.toString());
-			//word.set("a");
-			//context.write(word, one);
 			try {
 				xmlHandler.parse(value.toString());
-				//System.out.println(value.toString());
-				//System.out.println(xmlHandler.getId());
 			} catch (Exception e) {
 				System.out.println(e.getMessage());
 			}
 			String pageTitle = xmlHandler.getTitle();
 			String pageId = xmlHandler.getId();
 			String pageText = xmlHandler.getText();
-			//System.out.println(pageText);
 			TextParser textParser = new TextParser();
 			String parsedText = textParser.regExpParse(pageText);
-			//System.out.println(parsedText);
 			StringTokenizer tokenizer = new StringTokenizer(parsedText);
             int count_position=0;
 			while (tokenizer.hasMoreTokens())
@@ -47,7 +40,6 @@ public class MapReducePhase1 {
 				count_position++;
                 mapresultkey.set(tokenizer.nextToken() + "," + pageId);
                 position.set(String.valueOf(count_position));
-                //System.out.println(mapresultkey+" "+position);
                 context.write(mapresultkey, position);
             }
 		}

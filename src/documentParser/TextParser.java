@@ -9,10 +9,10 @@ public class TextParser {
 	public String regExpParse(String content) {
 		Pattern p = Pattern.compile("\\{{2}(?:C|c)ite[^\\}]+\\}{2}|" +	/*ignore {{C(c)ite ...}}*/
 				"\\[{2}(?:File|Image)[^\\[]+|" +						/*ignore [[File/Image... */
-				"<[^>]+>|[\\{\\}—#/()_=,.;|\"“”\\?!:'\\[\\]<>–-]");			/*ignore punctuation*/
+				"<[^>]+>|\\W");			/*ignore punctuation*/
 		//Pattern p = Pattern.compile("<[^>]+>");
 		Matcher m = p.matcher(content);
-		String parsedStr = m.replaceAll(" ");
+		String parsedStr = m.replaceAll(" ").toLowerCase();
 		return parsedStr;
 	}
 	
