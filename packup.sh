@@ -1,2 +1,2 @@
 #!/bin/bash
-jar cvf DocumentAnalysis.jar -C bin/ .
+jar cvf BigData.jar -C bin/ .
